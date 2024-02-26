@@ -10,7 +10,6 @@ const {getFirestore} = require("firebase-admin/firestore");
 initializeApp();
 const app = express();
 
-// build multiple CRUD interfaces:
 app.get("/hello-world", (req, res) =>
   res.status(200).json({message: "i am from api"})
 );
@@ -19,9 +18,20 @@ app.post("/api/messages", async (req, res) => {
   const writeResult = await getFirestore()
     .collection("messages")
     .add({text: req.body.text});
-  // Send back a message that we've successfully written the message
+
   res.json({result: `Message with ID: ${writeResult.id} added.`});
 });
+
+app.post("/api/charge", async (req, res) => {
+  const {id, amount} = req.body;
+
+  const writeResult = await getFirestore()
+    .collection("charge")
+    .add({id, amount});
+
+  res.json({result: `Message with ID: ${writeResult.id} added.`});
+});
+
 // app.put("/:id", (req, res) =>
 //   res.send(Widgets.update(req.params.id, req.body))
 // );
