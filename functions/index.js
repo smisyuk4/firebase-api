@@ -1,18 +1,14 @@
 const {onRequest} = require("firebase-functions/v2/https");
-const express = require("express");
-// const {logger} = require("firebase-functions");
-// const {onDocumentCreated} = require("firebase-functions/v2/firestore");
-
-// The Firebase Admin SDK to access Firestore.
 const {initializeApp} = require("firebase-admin/app");
 const {getFirestore} = require("firebase-admin/firestore");
+// const {onDocumentCreated} = require("firebase-functions/v2/firestore");
+
+require("dotenv").config();
+const express = require("express");
 
 initializeApp();
 const app = express();
-
-app.get("/hello-world", (req, res) =>
-  res.status(200).json({message: "i am from api"})
-);
+const stripe = require("stripe")(process.env.STRIPE_SECRET_KEY);
 
 app.post("/api/messages", async (req, res) => {
   const writeResult = await getFirestore()
@@ -32,14 +28,45 @@ app.post("/api/charge", async (req, res) => {
   res.json({result: `Message with ID: ${writeResult.id} added.`});
 });
 
+const calculateOrderAmount = (items) => {
+  // Replace this constant with a calculation of the order's amount
+  // Calculate the order total on the server to prevent
+  // people from directly manipulating the amount on the client
+  return 1400 * items;
+};
+
+app.post("/create-payment-intent", async (req, res) => {
+  const {items} = req.body;
+
+  try {
+    // Create a PaymentIntent with the order amount and currency
+    const paymentIntent = await stripe.paymentIntents.create({
+      amount: calculateOrderAmount(items),
+      currency: "pln",
+      // In the latest version of the API, specifying the `automatic_payment_methods` parameter is optional because Stripe enables its functionality by default.
+      automatic_payment_methods: {
+        enabled: true,
+      },
+    });
+
+    res.send({
+      clientSecret: paymentIntent.client_secret,
+    });
+  } catch (e) {
+    console.log("error: ", e);
+    res.send({
+      stripe: stripe ? stripe : null,
+      stripePublicKey: stripePublicKey ? stripePublicKey : null,
+      error: e,
+    });
+  }
+});
+
 // app.put("/:id", (req, res) =>
 //   res.send(Widgets.update(req.params.id, req.body))
 // );
 // app.delete("/:id", (req, res) => res.send(Widgets.delete(req.params.id)));
 // app.get("/", (req, res) => res.send(Widgets.list()));
-
-// Expose Express API as a single Cloud Function:
-exports.app = onRequest(app);
 
 // // Take the text parameter passed to this HTTP endpoint and insert it into
 // // Firestore under the path /messages/:documentId/original
@@ -53,3 +80,5 @@ exports.app = onRequest(app);
 //   // Send back a message that we've successfully written the message
 //   res.json({result: `Message with ID: ${writeResult.id} added.`});
 // });
+
+exports.app = onRequest(app);
