@@ -11,7 +11,13 @@ initializeApp();
 const app = express();
 app.use(
   cors({
-    origin: process.env.FRONTEND_PATH,
+    origin: [
+      process.env.FRONTEND_NGROK_PATH,
+      process.env.FRONTEND_FIREBASE_TEST_PATH,
+      process.env.FRONTEND_VERCEL_PATH,
+      process.env.FRONTEND_NGROK_PATH,
+    ],
+    default: process.env.FRONTEND_MAIN_PATH,
     optionsSuccessStatus: 200,
   })
 );
