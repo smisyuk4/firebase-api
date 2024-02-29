@@ -5,9 +5,16 @@ const {getFirestore} = require("firebase-admin/firestore");
 
 require("dotenv").config();
 const express = require("express");
+const cors = require("cors");
 
 initializeApp();
 const app = express();
+app.use(
+  cors({
+    origin: process.env.FRONTEND_PATH,
+    optionsSuccessStatus: 200,
+  })
+);
 const stripe = require("stripe")(process.env.STRIPE_SECRET_KEY);
 
 app.post("/api/messages", async (req, res) => {
@@ -28,22 +35,38 @@ app.post("/api/charge", async (req, res) => {
   res.json({result: `Message with ID: ${writeResult.id} added.`});
 });
 
-const calculateOrderAmount = (items) => {
-  // Replace this constant with a calculation of the order's amount
-  // Calculate the order total on the server to prevent
-  // people from directly manipulating the amount on the client
-  return 1400 * items;
-};
-
 app.post("/create-payment-intent", async (req, res) => {
-  const {items} = req.body;
+  const {updatedArray} = req.body;
+
+  const arrayId = updatedArray.map(({id}) => id);
+  let fullData = [];
 
   try {
-    // Create a PaymentIntent with the order amount and currency
+    const snapshot = await getFirestore()
+      .collection("products")
+      .where("id", "in", arrayId)
+      .get();
+
+    if (snapshot.empty) {
+      console.log("No matching documents.");
+      return;
+    }
+
+    snapshot.forEach((doc) => {
+      fullData = [...fullData, doc.data()];
+    });
+
+    const mergedArr = updatedArray.map((item, i) =>
+      Object.assign({}, item, fullData[i])
+    );
+
+    const overallCost = mergedArr.reduce((accumulator, currentValue) => {
+      return accumulator + currentValue.cost * currentValue.countInCart;
+    }, 0);
+
     const paymentIntent = await stripe.paymentIntents.create({
-      amount: calculateOrderAmount(items),
+      amount: overallCost,
       currency: "pln",
-      // In the latest version of the API, specifying the `automatic_payment_methods` parameter is optional because Stripe enables its functionality by default.
       automatic_payment_methods: {
         enabled: true,
       },
@@ -61,24 +84,5 @@ app.post("/create-payment-intent", async (req, res) => {
     });
   }
 });
-
-// app.put("/:id", (req, res) =>
-//   res.send(Widgets.update(req.params.id, req.body))
-// );
-// app.delete("/:id", (req, res) => res.send(Widgets.delete(req.params.id)));
-// app.get("/", (req, res) => res.send(Widgets.list()));
-
-// // Take the text parameter passed to this HTTP endpoint and insert it into
-// // Firestore under the path /messages/:documentId/original
-// exports.addmessage = onRequest(async (req, res) => {
-//   // Grab the text parameter.
-//   const original = req.query.text;
-//   // Push the new message into Firestore using the Firebase Admin SDK.
-//   const writeResult = await getFirestore()
-//     .collection("messages")
-//     .add({original: original});
-//   // Send back a message that we've successfully written the message
-//   res.json({result: `Message with ID: ${writeResult.id} added.`});
-// });
 
 exports.app = onRequest(app);
